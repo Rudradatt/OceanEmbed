@@ -1,0 +1,81 @@
+{
+  "policy_version": "v1",
+  "encoding": {
+    "fill_raw": -32767,
+    "valid_min_raw": -32766,
+    "valid_max_raw": 21306,
+    "scale_factor": 0.0007324442267417908,
+    "add_offset": 21.0
+  },
+  "levels_used": 36,
+  "zero_code_raw": -28671,
+  "near_floor_margin_codes": 50,
+  "coordinate_tolerance_deg": 0.001,
+  "static_exclusions": [
+    {
+      "name": "Column_A",
+      "lat": 15.0,
+      "lon": 50.58333,
+      "levels": [28, 29, 30],
+      "reason": "Column A in 2-cell pit (alongside Column B): temperatures drift cold across 1993-2002 and lock at raw -28671 (packed 0.0 C) from 2003 onwards at levels 28-30 (318.1m, 380.2m, 453.9m)."
+    },
+    {
+      "name": "Column_B",
+      "lat": 15.0,
+      "lon": 50.66667,
+      "levels": [28, 29, 30],
+      "reason": "Column B in 2-cell pit (alongside Column A): temperatures drift cold across 1993-2002 and lock at raw -28671 (packed 0.0 C) from 2003 onwards at levels 28-30 (318.1m, 380.2m, 453.9m)."
+    }
+  ],
+  "rule_table": [
+    {
+      "rule_id": 1,
+      "bit_flag": 1,
+      "name": "FILL_IN_STATIC_WET",
+      "description": "Raw value is _FillValue (-32767) in a cell marked ocean/wet in static 3D mask (established 129 cells per slice).",
+      "severity": "INFO"
+    },
+    {
+      "rule_id": 2,
+      "bit_flag": 2,
+      "name": "STATIC_EXCLUDED",
+      "description": "Cell column and level are catalogued in the static exclusions list (Columns A and B at levels 28-30).",
+      "severity": "INFO"
+    },
+    {
+      "rule_id": 3,
+      "bit_flag": 4,
+      "name": "ZERO_CODE",
+      "description": "Raw value equals zero code -28671 (packed 0.0 C). Evaluated as FAIL if outside static exclusions; PASS if excluded.",
+      "severity": "FAIL"
+    },
+    {
+      "rule_id": 4,
+      "bit_flag": 8,
+      "name": "NEAR_FLOOR",
+      "description": "Raw value in [-32766, -32716] (within 50 codes of valid_min); fill value is excluded. Evaluated as FAIL if outside exclusions.",
+      "severity": "FAIL"
+    },
+    {
+      "rule_id": 5,
+      "bit_flag": 16,
+      "name": "ABOVE_VALID_MAX",
+      "description": "Raw value strictly exceeds declared valid_max (21306, ~36.605 C). Cell retains valid status; overall status WARN.",
+      "severity": "WARN"
+    },
+    {
+      "rule_id": 6,
+      "bit_flag": 32,
+      "name": "FINITE_IN_STATIC_DRY",
+      "description": "Raw value is finite (not fill) in a cell marked land/dry (0) by static mask.",
+      "severity": "FAIL"
+    },
+    {
+      "rule_id": 7,
+      "bit_flag": 64,
+      "name": "MASK_DIFFERS_FROM_REFERENCE",
+      "description": "Finite status of cell differs from reference baseline finite mask (Jan 2019 Day 0). Only evaluated when reference_finite is given.",
+      "severity": "FAIL"
+    }
+  ]
+}
