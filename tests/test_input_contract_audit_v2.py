@@ -414,3 +414,150 @@ def test_config_driven_runner_known_counts(tmp_path):
     assert len(df_cov) == 1
     assert df_cov["glorys_finite_source_finite"].iloc[0] == 3
     assert df_cov["glorys_finite_source_fill"].iloc[0] == 1
+
+
+def test_planted_minmax_contract_vs_independent(tmp_path):
+    """
+    Test that audit_variable_raw_contract reproduces planted min/max values
+    for both integer and float datasets, preserves dtypes, and exactly equals
+    the independent recomputation function.
+    """
+    from reconcile_contract_minmax import compute_independent_minmax
+
+    nc_path = str(tmp_path / "synthetic_planted.nc")
+    lats = np.array([10.0, 11.0], dtype=np.float32)
+    lons = np.array([50.0, 51.0], dtype=np.float32)
+    times = np.array([0.0], dtype=np.float32)
+
+    # Integer dataset with known raw min=50, max=450, fill=-9999, scale=0.01, offset=10.0
+    # Decoded: 50*0.01+10 = 10.5, 450*0.01+10 = 14.5
+    raw_int = np.array([[[50, -9999], [200, 450]]], dtype=np.int16)
+
+    # Float dataset with known raw min=12.34, max=56.78, fill=1e20, scale=1.0, offset=0.0
+    raw_flt = np.array([[[12.34, 1e20], [30.0, 56.78]]], dtype=np.float32)
+
+    with h5netcdf.File(nc_path, "w") as f:
+        f.dimensions = {"time": 1, "latitude": 2, "longitude": 2}
+        v_lat = f.create_variable("latitude", ("latitude",), dtype=np.float32)
+        v_lat[:] = lats
+        v_lon = f.create_variable("longitude", ("longitude",), dtype=np.float32)
+        v_lon[:] = lons
+        v_time = f.create_variable("time", ("time",), dtype=np.float32)
+        v_time[:] = times
+        v_time.attrs["units"] = "hours since 2019-01-01 00:00:00"
+
+        # Var 1: int16
+        v1 = f.create_variable("int_var", ("time", "latitude", "longitude"), dtype=np.int16)
+        v1[:] = raw_int
+        v1.attrs["_FillValue"] = np.int16(-9999)
+        v1.attrs["scale_factor"] = np.float64(0.01)
+        v1.attrs["add_offset"] = np.float64(10.0)
+
+        # Var 2: float32
+        v2 = f.create_variable("flt_var", ("time", "latitude", "longitude"), dtype=np.float32)
+        v2[:] = raw_flt
+        v2.attrs["_FillValue"] = np.float32(1e20)
+        v2.attrs["scale_factor"] = np.float64(1.0)
+        v2.attrs["add_offset"] = np.float64(0.0)
+
+    # 1. Run v2 contract function
+    df_contract, _, _, _ = audit_variable_raw_contract(nc_path, "PLANTED_SRC")
+
+    int_row = df_contract[df_contract["variable"] == "int_var"].iloc[0]
+    flt_row = df_contract[df_contract["variable"] == "flt_var"].iloc[0]
+
+    # Verify integer variable contract
+    assert int_row["raw_min"] == 50
+    assert int_row["raw_max"] == 450
+    assert np.isclose(int_row["decoded_min"], 10.5)
+    assert np.isclose(int_row["decoded_max"], 14.5)
+
+    # Verify float variable contract (must preserve float type, not cast to int!)
+    assert np.isclose(flt_row["raw_min"], 12.34, atol=1e-3)
+    assert np.isclose(flt_row["raw_max"], 56.78, atol=1e-3)
+    assert isinstance(flt_row["raw_min"], (float, np.floating))
+    assert np.isclose(flt_row["decoded_min"], 12.34, atol=1e-3)
+    assert np.isclose(flt_row["decoded_max"], 56.78, atol=1e-3)
+
+    # 2. Run independent recomputation
+    df_ind = compute_independent_minmax(
+        sst_file=nc_path,
+        sla_file=nc_path,
+        sss_file=nc_path,
+        cur_file=nc_path
+    )
+    # Filter to one instance
+    ind_int = df_ind[(df_ind["source"] == "OSTIA_SST") & (df_ind["variable"] == "int_var")].iloc[0]
+    ind_flt = df_ind[(df_ind["source"] == "OSTIA_SST") & (df_ind["variable"] == "flt_var")].iloc[0]
+
+    # Assert contract outputs equal independent function outputs exactly
+    assert int_row["raw_min"] == ind_int["raw_min_day0"]
+    assert int_row["raw_max"] == ind_int["raw_max_day0"]
+    assert np.isclose(int_row["decoded_min"], ind_int["decoded_min_day0"])
+    assert np.isclose(int_row["decoded_max"], ind_int["decoded_max_day0"])
+
+    assert np.isclose(flt_row["raw_min"], ind_flt["raw_min_day0"])
+    assert np.isclose(flt_row["raw_max"], ind_flt["raw_max_day0"])
+    assert np.isclose(flt_row["decoded_min"], ind_flt["decoded_min_day0"])
+    assert np.isclose(flt_row["decoded_max"], ind_flt["decoded_max_day0"])
+
+
+def test_regression_harness_loud_mismatch_failure(tmp_path):
+    """
+    Test that check_regression_vs_v1 fails loudly (raises ValueError)
+    when a planted mismatch exists between v2 and independent ground truth.
+    """
+    from input_contract_audit_v2 import check_regression_vs_v1
+
+    # Fake v1 contract and coverage
+    v1_dir = str(tmp_path / "v1")
+    os.makedirs(v1_dir, exist_ok=True)
+    df_v1 = pd.DataFrame([{
+        "source": "OSTIA_SST",
+        "variable": "analysed_sst",
+        "day_index": 0,
+        "fill_cells": 100,
+        "non_fill_cells": 500,
+        "decoded_min": 273.87,
+        "decoded_max": 302.95,
+        "frozen_cells_count": 0,
+    }])
+    df_v1.to_csv(os.path.join(v1_dir, "variable_contract.csv"), index=False)
+    df_cov = pd.DataFrame([{
+        "source": "OSTIA_SST",
+        "variable": "analysed_sst",
+        "day_index": 0,
+        "glorys_finite_source_finite": 107312,
+        "glorys_finite_source_fill": 412,
+        "glorys_dry_source_finite": 907,
+    }])
+    df_cov.to_csv(os.path.join(v1_dir, "coverage_vs_glorys.csv"), index=False)
+
+    # v2 with intentional mismatch (e.g. decoded_min = 288.75 instead of 273.87)
+    df_v2 = pd.DataFrame([{
+        "source": "OSTIA_SST",
+        "variable": "analysed_sst",
+        "depth_m": np.nan,
+        "day_index": 0,
+        "fill_cells": 100,
+        "non_fill_cells": 500,
+        "decoded_min": 288.75,
+        "decoded_max": 305.80,
+        "frozen_cells_count": 0,
+    }])
+
+    # Independent CSV with ground truth
+    ind_csv = str(tmp_path / "ind.csv")
+    df_ind = pd.DataFrame([{
+        "source": "OSTIA_SST",
+        "variable": "analysed_sst",
+        "depth_m": np.nan,
+        "decoded_min_day0": 273.87,
+        "decoded_max_day0": 302.95,
+    }])
+    df_ind.to_csv(ind_csv, index=False)
+
+    # Must raise ValueError
+    with pytest.raises(ValueError, match="REGRESSION CHECK FAILED"):
+        check_regression_vs_v1(v1_dir, df_v2, df_cov, independent_csv_path=ind_csv)
+

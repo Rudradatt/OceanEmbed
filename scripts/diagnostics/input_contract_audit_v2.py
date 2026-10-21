@@ -490,11 +490,13 @@ def audit_variable_raw_contract(
                 frozen_mask = all_days_non_fill & (raw_min_time == raw_max_time)
                 frozen_count = int(np.sum(frozen_mask))
 
+                is_int = np.issubdtype(raw_data.dtype, np.integer)
+
                 # Record first 20 frozen cells
                 if frozen_count > 0:
                     frozen_indices = np.argwhere(frozen_mask)[:20]
                     for idx_count, (r_idx, c_idx) in enumerate(frozen_indices):
-                        r_val = int(raw_data[0, r_idx, c_idx])
+                        r_val = int(raw_data[0, r_idx, c_idx]) if is_int else float(raw_data[0, r_idx, c_idx])
                         d_val = float(r_val * scale + offset)
                         frozen_rows.append({
                             "source": source_name,
@@ -519,8 +521,8 @@ def audit_variable_raw_contract(
 
                     if n_non_fill > 0:
                         valid_raw_vals = day_raw[day_non_fill]
-                        raw_min = int(np.min(valid_raw_vals))
-                        raw_max = int(np.max(valid_raw_vals))
+                        raw_min = int(np.min(valid_raw_vals)) if is_int else float(np.min(valid_raw_vals))
+                        raw_max = int(np.max(valid_raw_vals)) if is_int else float(np.max(valid_raw_vals))
 
                         # Manual decode: raw * scale + offset
                         valid_decoded = valid_raw_vals.astype(np.float64) * scale + offset
@@ -587,7 +589,7 @@ def audit_variable_raw_contract(
                                 "lon_idx": int(c_coords[sel]),
                                 "latitude": float(lat[r_coords[sel]]),
                                 "longitude": float(lon[c_coords[sel]]),
-                                "raw_value": int(raw_vals[sel]),
+                                "raw_value": int(raw_vals[sel]) if is_int else float(raw_vals[sel]),
                                 "decoded_value": float(dec_vals[sel]),
                             })
 
@@ -607,7 +609,7 @@ def audit_variable_raw_contract(
                                 "lon_idx": int(c_coords[sel]),
                                 "latitude": float(lat[r_coords[sel]]),
                                 "longitude": float(lon[c_coords[sel]]),
-                                "raw_value": int(raw_vals[sel]),
+                                "raw_value": int(raw_vals[sel]) if is_int else float(raw_vals[sel]),
                                 "decoded_value": float(dec_vals[sel]),
                             })
 
@@ -1274,7 +1276,12 @@ def record_environment_snapshot(out_path: str) -> dict:
 # Regression Verification Against v1
 # ==============================================================================
 
-def check_regression_vs_v1(v1_dir: str, df_v2_contract: pd.DataFrame, df_v2_coverage: pd.DataFrame) -> dict:
+def check_regression_vs_v1(
+    v1_dir: str,
+    df_v2_contract: pd.DataFrame,
+    df_v2_coverage: pd.DataFrame,
+    independent_csv_path: str = "outputs/diagnostics/contract_minmax_reconcile/independent_minmax.csv"
+) -> dict:
     """
     Compare v2 outputs on SST and SLA against v1 expectations and saved CSVs:
     - Per-variable fill counts per day
@@ -1285,6 +1292,7 @@ def check_regression_vs_v1(v1_dir: str, df_v2_contract: pd.DataFrame, df_v2_cove
         SST analysed_sst: 107,312 / 412 / 907
         SLA sla: 107,664 / 60 / 2,383
         SLA adt, ugos, vgos: 107,393 / 331 / 1,832
+    - Side-by-side comparison with v1 and independent recompute, failing loudly on mismatch.
     """
     results = {}
     v1_contract_path = os.path.join(v1_dir, "variable_contract.csv")
@@ -1300,12 +1308,37 @@ def check_regression_vs_v1(v1_dir: str, df_v2_contract: pd.DataFrame, df_v2_cove
     # Filter v2 contract to OSTIA_SST and DUACS_SLA
     v2_sub_c = df_v2_contract[df_v2_contract["source"].isin(["OSTIA_SST", "DUACS_SLA"])].copy()
 
-    # 1. Fill count comparison
+    # 1. Fill count and min/max comparison vs v1
     fill_match = True
     non_fill_match = True
     dec_min_match = True
     dec_max_match = True
     frozen_match = True
+    v1_mismatches = []
+
+    print("\n" + "=" * 96)
+    print("REGRESSION CHECK: SIDE-BY-SIDE COMPARISON (v1 vs v2 Day 0)")
+    print("=" * 96)
+    print(f"{'Source':<12} {'Variable':<16} {'v1 Decoded Min..Max':<28} {'v2 Decoded Min..Max':<28} {'Status'}")
+    print("-" * 96)
+
+    day0_v1 = df_v1_c[df_v1_c["day_index"] == 0]
+    for _, r1 in day0_v1.iterrows():
+        match_rows = v2_sub_c[
+            (v2_sub_c["source"] == r1["source"]) &
+            (v2_sub_c["variable"] == r1["variable"]) &
+            (v2_sub_c["day_index"] == 0)
+        ]
+        if len(match_rows) > 0:
+            r2 = match_rows.iloc[0]
+            v1_str = f"{r1['decoded_min']:.4f} .. {r1['decoded_max']:.4f}"
+            v2_str = f"{r2['decoded_min']:.4f} .. {r2['decoded_max']:.4f}"
+            d_min_ok = np.isclose(r1["decoded_min"], r2["decoded_min"], atol=1e-3, equal_nan=True)
+            d_max_ok = np.isclose(r1["decoded_max"], r2["decoded_max"], atol=1e-3, equal_nan=True)
+            status_str = "MATCH" if (d_min_ok and d_max_ok) else "MISMATCH"
+            print(f"{r1['source']:<12} {r1['variable']:<16} {v1_str:<28} {v2_str:<28} {status_str}")
+
+    print("=" * 96 + "\n")
 
     for _, r1 in df_v1_c.iterrows():
         match_rows = v2_sub_c[
@@ -1315,18 +1348,24 @@ def check_regression_vs_v1(v1_dir: str, df_v2_contract: pd.DataFrame, df_v2_cove
         ]
         if len(match_rows) == 0:
             fill_match = False
+            v1_mismatches.append(f"Missing row in v2: {r1['source']} {r1['variable']} day {r1['day_index']}")
             continue
         r2 = match_rows.iloc[0]
         if r1["fill_cells"] != r2["fill_cells"]:
             fill_match = False
+            v1_mismatches.append(f"Fill cell mismatch: {r1['source']} {r1['variable']} day {r1['day_index']}")
         if r1["non_fill_cells"] != r2["non_fill_cells"]:
             non_fill_match = False
+            v1_mismatches.append(f"Non-fill cell mismatch: {r1['source']} {r1['variable']} day {r1['day_index']}")
         if not np.isclose(r1["decoded_min"], r2["decoded_min"], atol=1e-3, equal_nan=True):
             dec_min_match = False
+            v1_mismatches.append(f"Decoded min mismatch: {r1['source']} {r1['variable']} day {r1['day_index']} (v1={r1['decoded_min']}, v2={r2['decoded_min']})")
         if not np.isclose(r1["decoded_max"], r2["decoded_max"], atol=1e-3, equal_nan=True):
             dec_max_match = False
+            v1_mismatches.append(f"Decoded max mismatch: {r1['source']} {r1['variable']} day {r1['day_index']} (v1={r1['decoded_max']}, v2={r2['decoded_max']})")
         if r1["frozen_cells_count"] != r2["frozen_cells_count"]:
             frozen_match = False
+            v1_mismatches.append(f"Frozen cell count mismatch: {r1['source']} {r1['variable']} day {r1['day_index']}")
 
     results["check_sst_sla_fill_counts_per_day"] = "PASS" if fill_match else "FAIL"
     results["check_sst_sla_non_fill_counts_per_day"] = "PASS" if non_fill_match else "FAIL"
@@ -1334,11 +1373,53 @@ def check_regression_vs_v1(v1_dir: str, df_v2_contract: pd.DataFrame, df_v2_cove
     results["check_sst_sla_decoded_max"] = "PASS" if dec_max_match else "FAIL"
     results["check_sst_sla_frozen_cells_count"] = "PASS" if frozen_match else "FAIL"
 
-    # 2. Coverage counts vs GLORYS level 0
-    # Expected:
-    # SST analysed_sst: 107312 / 412 / 907
-    # SLA sla: 107664 / 60 / 2383
-    # SLA adt, ugos, vgos: 107393 / 331 / 1832
+    # 2. Independent ground truth recompute comparison across all series
+    ind_match = True
+    ind_mismatches = []
+    if independent_csv_path and os.path.exists(independent_csv_path):
+        df_ind = pd.read_csv(independent_csv_path)
+        print("=" * 115)
+        print("REGRESSION CHECK: INDEPENDENT RECOMPUTE VS v2 (All 47 Series Day 0)")
+        print("=" * 115)
+        print(f"{'Source':<20} {'Variable':<16} {'Depth':<8} {'Independent Min..Max':<28} {'v2 Decoded Min..Max':<28} {'Status'}")
+        print("-" * 115)
+
+        day0_v2 = df_v2_contract[df_v2_contract["day_index"] == 0]
+        for _, r_ind in df_ind.iterrows():
+            src = r_ind["source"]
+            vn = r_ind["variable"]
+            depth = r_ind["depth_m"]
+            if pd.isna(depth):
+                m_v2 = day0_v2[(day0_v2["source"] == src) & (day0_v2["variable"] == vn) & day0_v2["depth_m"].isna()]
+            else:
+                numeric_depth = pd.to_numeric(day0_v2["depth_m"], errors="coerce")
+                m_v2 = day0_v2[(day0_v2["source"] == src) & (day0_v2["variable"] == vn) & np.isclose(numeric_depth, float(depth))]
+
+            if len(m_v2) == 0:
+                ind_match = False
+                ind_mismatches.append(f"Missing from v2: {src} {vn} depth={depth}")
+                print(f"{src:<20} {vn:<16} {str(depth):<8} {'N/A':<28} {'MISSING':<28} FAIL")
+                continue
+
+            r2 = m_v2.iloc[0]
+            ind_min, ind_max = r_ind["decoded_min_day0"], r_ind["decoded_max_day0"]
+            v2_min, v2_max = r2["decoded_min"], r2["decoded_max"]
+            close_min = np.isclose(ind_min, v2_min, atol=1e-3, equal_nan=True)
+            close_max = np.isclose(ind_max, v2_max, atol=1e-3, equal_nan=True)
+            status_str = "MATCH" if (close_min and close_max) else "MISMATCH"
+            if not (close_min and close_max):
+                ind_match = False
+                ind_mismatches.append(f"Mismatch: {src} {vn} depth={depth}: ind=({ind_min}, {ind_max}) vs v2=({v2_min}, {v2_max})")
+
+            depth_str = f"{depth:.1f}m" if not pd.isna(depth) else "N/A"
+            ind_str = f"{ind_min:.4f} .. {ind_max:.4f}"
+            v2_str = f"{v2_min:.4f} .. {v2_max:.4f}"
+            print(f"{src:<20} {vn:<16} {depth_str:<8} {ind_str:<28} {v2_str:<28} {status_str}")
+
+        print("=" * 115 + "\n")
+        results["check_independent_recompute_match"] = "PASS" if ind_match else "FAIL"
+
+    # 3. Coverage counts vs GLORYS level 0
     expected_cov = {
         ("OSTIA_SST", "analysed_sst"): (107312, 412, 907),
         ("DUACS_SLA", "sla"): (107664, 60, 2383),
@@ -1370,8 +1451,13 @@ def check_regression_vs_v1(v1_dir: str, df_v2_contract: pd.DataFrame, df_v2_cove
     results["coverage_checks"] = cov_checks
     results["all_coverage_checks_passed"] = all_cov_pass
 
-    all_pass = (fill_match and non_fill_match and dec_min_match and dec_max_match and frozen_match and all_cov_pass)
+    all_pass = (fill_match and non_fill_match and dec_min_match and dec_max_match and frozen_match and all_cov_pass and ind_match)
     results["overall_regression_status"] = "PASS" if all_pass else "FAIL"
+
+    if not all_pass:
+        msg = f"REGRESSION CHECK FAILED! v1 mismatches: {v1_mismatches}; independent mismatches: {ind_mismatches}"
+        print(f"CRITICAL REGRESSION ERROR: {msg}")
+        raise ValueError(msg)
 
     return results
 
@@ -1606,9 +1692,18 @@ def run_v2_audit(config_path: str, output_dir: str) -> dict:
             "sla_velocity_extremes": step3d,
         },
         "variable_contract_summary": {
-            "total_variables_evaluated": len(df_contract["variable"].unique()),
+            "total_series_evaluated": int(len(df_contract[["source", "variable", "depth_m"]].drop_duplicates())),
+            "total_source_variable_pairs": int(len(df_contract[["source", "variable"]].drop_duplicates())),
+            "total_unique_variable_names": int(len(df_contract["variable"].unique())),
+            "total_variables_evaluated": int(len(df_contract["variable"].unique())),
             "variables": list(df_contract["variable"].unique()),
             "variables_with_depths": list(df_contract.groupby(["source", "variable", "depth_m"]).groups.keys()),
+            "excluded_non_spatial_or_fill_variables": {
+                "OSTIA_SST": ["latitude", "longitude", "time"],
+                "DUACS_SLA": ["latitude", "longitude", "time", "tpa_correction"],
+                "MULTIOBS_SSS": ["latitude", "longitude", "time", "depth"],
+                "MULTIOBS_CURRENTS": ["latitude", "longitude", "time", "depth"]
+            },
             "all_fill_masks_identical_over_time": bool(df_contract["fill_mask_identical_all_days"].all()),
             "total_valid_min_violations": int(df_contract["valid_min_violations"].sum()),
             "total_valid_max_violations": int(df_contract["valid_max_violations"].sum()),
