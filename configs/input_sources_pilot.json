@@ -1,0 +1,59 @@
+{
+  "pilot_version": "v2",
+  "description": "Configuration of input data sources for Generalized Input Contract Audit v2",
+  "target_grid": {
+    "description": "Project target grid: 100 x 240, cell-centered 0.25 deg",
+    "lat_bounds": [5.0, 30.0],
+    "lon_bounds": [45.0, 105.0],
+    "lat_step": 0.25,
+    "lon_step": 0.25,
+    "lat_centres_start": 5.125,
+    "lat_centres_end": 29.875,
+    "lat_centres_count": 100,
+    "lon_centres_start": 45.125,
+    "lon_centres_end": 104.875,
+    "lon_centres_count": 240
+  },
+  "reference": {
+    "glorys_path": "data/raw/glorys/glorys_thetao_2019-01.nc",
+    "glorys_static_bathy_path": "data/raw/glorys_static/glorys_static_mask_bathy.nc",
+    "expected_sha256": {
+      "data/raw/glorys/glorys_thetao_2019-01.nc": "750070948a2fba9a3915dbfb501562c19ccbbdc6cc8e2a50ed111a93c0af5c3f",
+      "data/raw/glorys_static/glorys_static_mask_bathy.nc": "fdb0c5fdc282180c0b5b58fa689753df79c22f69f4dc6dac64314a8cb82a79a5"
+    }
+  },
+  "sources": [
+    {
+      "name": "OSTIA_SST",
+      "path": "data/raw/sst/sst_ostia_2019-01.nc",
+      "dataset_id": "cmems_obs-sst_glo_phy-sst_my_l4-ostia_P1D-m",
+      "variables": "all",
+      "depth_selection": null,
+      "coverage_variables": ["analysed_sst"]
+    },
+    {
+      "name": "DUACS_SLA",
+      "path": "data/raw/sla/sla_duacs_2019-01.nc",
+      "dataset_id": "cmems_obs-sl_glo_phy-ssh_my_0.125deg_P1D-m",
+      "variables": "all",
+      "depth_selection": null,
+      "coverage_variables": ["sla", "adt", "ugos", "vgos"]
+    },
+    {
+      "name": "MULTIOBS_SSS",
+      "path": "data/raw/sss/sss_multiobs_2019-01.nc",
+      "dataset_id": "cmems_obs-mob_glo_phy-sss_my_multi_P1D",
+      "variables": "all",
+      "depth_selection": null,
+      "coverage_variables": ["sos"]
+    },
+    {
+      "name": "MULTIOBS_CURRENTS",
+      "path": "data/raw/currents/currents_multiobs_2019-01.nc",
+      "dataset_id": "cmems_obs-mob_glo_phy-cur_my_0.25deg_P1D-m",
+      "variables": "all",
+      "depth_selection": [0, 15],
+      "coverage_variables": ["uo", "vo", "ugos", "vgos"]
+    }
+  ]
+}
