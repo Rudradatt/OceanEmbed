@@ -1,0 +1,189 @@
+{
+  "policy_name": "input_policy_v1",
+  "policy_version": "v1",
+  "description": "Input builders v1 policy configuration for OSTIA SST, DUACS SLA, MULTIOBS SSS, and MULTIOBS Currents aggregation to 0.25 deg target grid",
+  "target_grid": {
+    "n_lat": 100,
+    "n_lon": 240,
+    "lat_start": 5.0,
+    "lat_end": 30.0,
+    "lon_start": 45.0,
+    "lon_end": 105.0,
+    "lat_step": 0.25,
+    "lon_step": 0.25,
+    "lat_centers_start": 5.125,
+    "lat_centers_end": 29.875,
+    "lon_centers_start": 45.125,
+    "lon_centers_end": 104.875
+  },
+  "sources": {
+    "sst": {
+      "name": "OSTIA_SST",
+      "raw_path": "data/raw/sst/sst_ostia_2019-01.nc",
+      "expected_sha256": "9e733b5956f4d9bba81ec1c7a4bcbfa3b456e61af969d9ae13c57ef6fcc72265",
+      "variable_name": "analysed_sst",
+      "mask_name": "mask",
+      "expected_encoding": {
+        "raw_dtype": "int16",
+        "scale_factor": 0.009999999776482582,
+        "add_offset": 273.1499938964844,
+        "fill_value": -32768,
+        "source_units": "kelvin"
+      },
+      "validity_rule": {
+        "type": "sst_bitmask_and_fill",
+        "description": "non-fill AND (mask & 6) == 0 (excludes land bit 1/val 2 and lake bit 2/val 4)",
+        "excluded_mask_bits": 6
+      },
+      "aggregation_ratio": [5, 5],
+      "output_variables": {
+        "value": {
+          "name": "sst_c",
+          "units": "degC",
+          "long_name": "Sea Surface Temperature in degC",
+          "conversion": "decoded_kelvin_minus_273_15"
+        },
+        "frac": {
+          "name": "sst_frac",
+          "units": "1",
+          "long_name": "SST Valid Native Cell Fraction in Block"
+        }
+      }
+    },
+    "sla": {
+      "name": "DUACS_SLA",
+      "raw_path": "data/raw/sla/sla_duacs_2019-01.nc",
+      "expected_sha256": "36b558a5642feaff3d8563aea4dac76f70f850d1b555431a8893474b7eccd692",
+      "variable_name": "sla",
+      "expected_encoding": {
+        "raw_dtype": "int32",
+        "scale_factor": 0.0001,
+        "add_offset": 0.0,
+        "fill_value": -2147483647,
+        "source_units": "m"
+      },
+      "validity_rule": {
+        "type": "non_fill",
+        "description": "raw != -2147483647"
+      },
+      "aggregation_ratio": [2, 2],
+      "output_variables": {
+        "value": {
+          "name": "sla_m",
+          "units": "m",
+          "long_name": "Sea Level Anomaly in meters",
+          "conversion": "raw_times_scale"
+        },
+        "frac": {
+          "name": "sla_frac",
+          "units": "1",
+          "long_name": "SLA Valid Native Cell Fraction in Block"
+        }
+      }
+    },
+    "sss": {
+      "name": "MULTIOBS_SSS",
+      "raw_path": "data/raw/sss/sss_multiobs_2019-01.nc",
+      "expected_sha256": "74dc119b9d34a1b0330e1e9066e067db658dfaa8ff44dedb6edf03041b6ff043",
+      "variable_name": "sos",
+      "expected_encoding": {
+        "raw_dtype": "float32",
+        "scale_factor": 1.0,
+        "add_offset": 0.0,
+        "fill_value": -32767.0,
+        "source_units": ".001"
+      },
+      "validity_rule": {
+        "type": "non_fill",
+        "description": "raw != -32767.0"
+      },
+      "aggregation_ratio": [2, 2],
+      "output_variables": {
+        "value": {
+          "name": "sss",
+          "units": ".001",
+          "long_name": "Sea Surface Salinity",
+          "conversion": "identity"
+        },
+        "frac": {
+          "name": "sss_frac",
+          "units": "1",
+          "long_name": "SSS Valid Native Cell Fraction in Block"
+        }
+      }
+    },
+    "currents": {
+      "name": "MULTIOBS_CURRENTS",
+      "raw_path": "data/raw/currents/currents_multiobs_2019-01.nc",
+      "expected_sha256": "ad98b7684663b42a2eaa4ced7d5b52ec795fc711d050cdd87cd0b70eaf0ca4a7",
+      "depth_index": 0,
+      "aggregation_ratio": [1, 1],
+      "variables": {
+        "uo": {
+          "variable_name": "uo",
+          "expected_encoding": {
+            "raw_dtype": "int16",
+            "scale_factor": 0.001,
+            "add_offset": 0.0,
+            "fill_value": 32767,
+            "source_units": "m/s"
+          },
+          "validity_rule": {
+            "type": "non_fill",
+            "description": "raw != 32767 at depth index 0"
+          },
+          "output_variables": {
+            "value": {
+              "name": "uo_ms",
+              "units": "m/s",
+              "long_name": "Eastward Ocean Surface Current Velocity",
+              "conversion": "raw_times_scale"
+            },
+            "frac": {
+              "name": "uo_frac",
+              "units": "1",
+              "long_name": "uo Valid Native Cell Fraction in Block"
+            }
+          }
+        },
+        "vo": {
+          "variable_name": "vo",
+          "expected_encoding": {
+            "raw_dtype": "int16",
+            "scale_factor": 0.001,
+            "add_offset": 0.0,
+            "fill_value": 32767,
+            "source_units": "m/s"
+          },
+          "validity_rule": {
+            "type": "non_fill",
+            "description": "raw != 32767 at depth index 0"
+          },
+          "output_variables": {
+            "value": {
+              "name": "vo_ms",
+              "units": "m/s",
+              "long_name": "Northward Ocean Surface Current Velocity",
+              "conversion": "raw_times_scale"
+            },
+            "frac": {
+              "name": "vo_frac",
+              "units": "1",
+              "long_name": "vo Valid Native Cell Fraction in Block"
+            }
+          }
+        }
+      }
+    }
+  },
+  "reference": {
+    "glorys_targets_path": "data/processed/glorys_targets/glorys_targets_2019-01.nc",
+    "glorys_thetao_path": "data/raw/glorys/glorys_thetao_2019-01.nc",
+    "glorys_static_path": "data/raw/glorys_static/glorys_static_mask_bathy.nc",
+    "expected_sha256": {
+      "data/raw/glorys/glorys_thetao_2019-01.nc": "750070948a2fba9a3915dbfb501562c19ccbbdc6cc8e2a50ed111a93c0af5c3f",
+      "data/raw/glorys_static/glorys_static_mask_bathy.nc": "fdb0c5fdc282180c0b5b58fa689753df79c22f69f4dc6dac64314a8cb82a79a5",
+      "data/processed/glorys_targets/glorys_targets_2019-01.nc": "11cb8d749a7678331df318b6f9115c646cce2d45094f57fcae8c8ad0cfad456d"
+    }
+  }
+}
