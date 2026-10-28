@@ -1,0 +1,46 @@
+{
+  "policy_name": "glorys_target_policy_v1",
+  "policy_version": "v1",
+  "qc_policy_path": "configs/glorys_qc_policy_v1.json",
+  "tauT": 1.0,
+  "horizontal_method": "area_weighted_valid",
+  "vertical_method": "pchip_valid_prefix",
+  "depth0": "level0",
+  "seabed_gap": "missing",
+  "target_depths": [
+    0.0,
+    5.0,
+    10.0,
+    20.0,
+    30.0,
+    50.0,
+    75.0,
+    100.0,
+    125.0,
+    150.0,
+    200.0,
+    300.0,
+    500.0,
+    700.0,
+    1000.0
+  ],
+  "target_grid": {
+    "n_lat": 100,
+    "n_lon": 240,
+    "lat_start": 5.0,
+    "lat_end": 30.0,
+    "lon_start": 45.0,
+    "lon_end": 105.0,
+    "lat_step": 0.25,
+    "lon_step": 0.25,
+    "lat_centers_start": 5.125,
+    "lat_centers_end": 29.875,
+    "lon_centers_start": 45.125,
+    "lon_centers_end": 104.875
+  },
+  "raw_encoding": {
+    "scale_factor": 0.0007324442267417908,
+    "add_offset": 21.0,
+    "fill_raw": -32767
+  }
+}
