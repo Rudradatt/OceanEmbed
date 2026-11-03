@@ -37,6 +37,7 @@ from scripts.preprocessing.glorys_target_builder import (
     compute_overlap_weights_1d,
     compute_overlap_weights_2d,
     find_contiguous_valid_prefix_k,
+    get_git_dirty,
     interpolate_column_pchip,
     load_target_policy,
     regrid_method_A,
@@ -519,10 +520,26 @@ def test_output_netcdf_roundtrip(toy_geometry):
                 "policy_name", "policy_version", "tauT", "horizontal_method",
                 "vertical_method", "depth0_method", "raw_glorys_sha256",
                 "raw_static_sha256", "qc_policy_sha256", "builder_script_sha256",
-                "git_commit", "created_utc", "python_version", "numpy_version",
+                "git_commit", "git_dirty", "created_utc", "python_version", "numpy_version",
                 "scipy_version", "xarray_version"
             ]:
                 assert attr in ds_out.attrs, f"Missing global attribute: {attr}"
+            assert ds_out.attrs["git_dirty"] in ("true", "false", "unavailable")
+
+        # Verify coordinates have NO _FillValue
+        import h5netcdf
+        with h5netcdf.File(out_nc_path, "r") as f_nc:
+            for coord_name in ["time", "depth", "latitude", "longitude"]:
+                assert "_FillValue" not in f_nc.variables[coord_name].attrs, (
+                    f"Coordinate '{coord_name}' unexpectedly has _FillValue attribute"
+                )
+
+
+def test_git_dirty_target_builder():
+    status = get_git_dirty()
+    assert status in ("true", "false", "unavailable")
+    # Non-existent directory returns unavailable
+    assert get_git_dirty("non_existent_directory_xyz123") == "unavailable"
 
 
 # =============================================================================

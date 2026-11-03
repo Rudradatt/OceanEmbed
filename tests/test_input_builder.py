@@ -35,6 +35,7 @@ from scripts.preprocessing.input_builder import (
     decode_sst,
     decode_sst_degc,
     decode_timestamps,
+    get_git_dirty,
     nesting_check,
     parse_time_units,
     verify_time_match,
@@ -289,13 +290,16 @@ def test_output_roundtrip(tmp_path):
         attrs={
             "policy_name": "test_policy",
             "policy_version": "v1",
+            "git_dirty": "false",
         },
     )
 
     encoding = {
         "sst_c": {"zlib": True, "complevel": 4, "_FillValue": np.float32(np.nan), "dtype": "float32"},
         "sst_frac": {"zlib": True, "complevel": 4, "_FillValue": np.float32(np.nan), "dtype": "float32"},
-        "time": {"dtype": "float32"},
+        "time": {"dtype": "float32", "_FillValue": None},
+        "latitude": {"dtype": "float32", "_FillValue": None},
+        "longitude": {"dtype": "float32", "_FillValue": None},
     }
     ds.to_netcdf(out_file, engine="h5netcdf", encoding=encoding)
     ds.close()
@@ -307,6 +311,7 @@ def test_output_roundtrip(tmp_path):
         assert ds_in["sst_c"].attrs["units"] == "degC"
         assert ds_in["sst_frac"].attrs["units"] == "1"
         assert ds_in.attrs["policy_name"] == "test_policy"
+        assert ds_in.attrs["git_dirty"] == "false"
 
         # Check NaN pattern matches frac == 0
         val_in = ds_in["sst_c"].values
@@ -320,6 +325,19 @@ def test_output_roundtrip(tmp_path):
         # Where frac > 0, value should match original within float32 tolerance
         mask_valid = frac_in > 0
         np.testing.assert_allclose(val_in[mask_valid], sst_val[mask_valid], rtol=1e-6)
+
+    # Verify coordinates have NO _FillValue
+    with h5netcdf.File(out_file, "r") as f_nc:
+        for cname in ["time", "latitude", "longitude"]:
+            assert "_FillValue" not in f_nc.variables[cname].attrs, (
+                f"Coordinate '{cname}' unexpectedly has _FillValue attribute"
+            )
+
+
+def test_git_dirty_input_builder():
+    status = get_git_dirty()
+    assert status in ("true", "false", "unavailable")
+    assert get_git_dirty("non_existent_directory_xyz123") == "unavailable"
 
 
 # =============================================================================

@@ -92,6 +92,17 @@ def get_git_commit_hash(repo_dir: Optional[str] = None) -> str:
         return "unavailable"
 
 
+def get_git_dirty(repo_dir: Optional[str] = None) -> str:
+    """Retrieve git dirty status ('true', 'false', or 'unavailable') on tracked files."""
+    try:
+        cmd = ["git", "status", "--porcelain", "-uno"]
+        cwd = repo_dir or PROJECT_ROOT
+        res = subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        return "true" if res.stdout.strip() else "false"
+    except Exception:
+        return "unavailable"
+
+
 # =============================================================================
 # Policy Loading
 # =============================================================================
@@ -677,6 +688,7 @@ def build_month_file(
     this_script_path = os.path.abspath(__file__)
     sha_builder = compute_file_sha256(this_script_path)
     git_commit = get_git_commit_hash(PROJECT_ROOT)
+    git_dirty = get_git_dirty(PROJECT_ROOT)
 
     # Load coordinates from source NetCDF
     native_lats, native_lons, native_depths = load_coordinates(glorys_path)
@@ -824,6 +836,7 @@ def build_month_file(
         "qc_policy_sha256": sha_qc_pol,
         "builder_script_sha256": sha_builder,
         "git_commit": git_commit,
+        "git_dirty": git_dirty,
         "created_utc": created_utc,
         "python_version": sys.version.split()[0],
         "numpy_version": np.__version__,
@@ -850,6 +863,19 @@ def build_month_file(
         },
         "time": {
             "dtype": time_var.dtype,
+            "_FillValue": None,
+        },
+        "depth": {
+            "dtype": "float32",
+            "_FillValue": None,
+        },
+        "latitude": {
+            "dtype": "float32",
+            "_FillValue": None,
+        },
+        "longitude": {
+            "dtype": "float32",
+            "_FillValue": None,
         },
     }
 

@@ -90,6 +90,23 @@ def get_git_commit_hash(repo_dir: Optional[str] = None) -> str:
         return "unavailable"
 
 
+def get_git_dirty(repo_dir: Optional[str] = None) -> str:
+    """Get current git dirty status on tracked files ('true', 'false', or 'unavailable')."""
+    if repo_dir is None:
+        repo_dir = PROJECT_ROOT
+    try:
+        res = subprocess.run(
+            ["git", "status", "--porcelain", "-uno"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return "true" if res.stdout.strip() else "false"
+    except Exception:
+        return "unavailable"
+
+
 def load_policy(policy: Union[Dict[str, Any], str, os.PathLike]) -> Dict[str, Any]:
     """Load policy dict or load JSON from path."""
     if isinstance(policy, dict):
@@ -521,6 +538,7 @@ def build_month_file(
     sha_static = compute_file_sha256(static_raw_path) if static_raw_path and os.path.exists(static_raw_path) else None
 
     git_commit = get_git_commit_hash(PROJECT_ROOT)
+    git_dirty = get_git_dirty(PROJECT_ROOT)
     created_utc = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     # Load target reference coordinates and time
@@ -803,6 +821,7 @@ def build_month_file(
         "policy_sha256": sha_policy,
         "builder_script_sha256": sha_builder,
         "git_commit": git_commit,
+        "git_dirty": git_dirty,
         "created_utc": created_utc,
         "python_version": sys.version.split()[0],
         "numpy_version": np.__version__,
@@ -824,9 +843,9 @@ def build_month_file(
         }
         for var in data_vars
     }
-    encoding["time"] = {"dtype": ref_time_values.dtype}
-    encoding["latitude"] = {"dtype": "float32"}
-    encoding["longitude"] = {"dtype": "float32"}
+    encoding["time"] = {"dtype": ref_time_values.dtype, "_FillValue": None}
+    encoding["latitude"] = {"dtype": "float32", "_FillValue": None}
+    encoding["longitude"] = {"dtype": "float32", "_FillValue": None}
 
     ds_inputs.to_netcdf(out_path, engine="h5netcdf", encoding=encoding)
     ds_inputs.close()
@@ -876,6 +895,7 @@ def build_month_file(
             "path": os.path.abspath(__file__),
             "sha256": sha_builder,
             "git_commit": git_commit,
+            "git_dirty": git_dirty,
             "created_utc": created_utc,
         },
         "input_files": {
