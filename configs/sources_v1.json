@@ -1,0 +1,91 @@
+{
+  "version": "v1",
+  "description": "Copernicus Marine / CMEMS source configuration for OceanEmbed preprocessing",
+  "spatial_subset": {
+    "lat_min": 5.0,
+    "lat_max": 30.0,
+    "lon_min": 45.0,
+    "lon_max": 105.0
+  },
+  "sources": {
+    "glorys": {
+      "name": "GLORYS12V1 Daily Reanalysis",
+      "dataset_id": "cmems_mod_glo_phy_my_0.083deg_P1D-m",
+      "enabled": true,
+      "variables": ["thetao"],
+      "depth_min": 0.0,
+      "depth_max": 1100.0,
+      "raw_dir": "data/raw/glorys",
+      "filename_template": "glorys_thetao_{year:04d}-{month:02d}.nc",
+      "download_frequency": "monthly"
+    },
+    "static": {
+      "name": "GLORYS12V1 Static Grid & Bathymetry",
+      "dataset_id": "cmems_mod_glo_phy_my_0.083deg_static",
+      "enabled": true,
+      "variables": ["mask", "bathy"],
+      "depth_min": null,
+      "depth_max": null,
+      "raw_dir": "data/raw/glorys_static",
+      "filename_template": "glorys_static_mask_bathy.nc",
+      "download_frequency": "once"
+    },
+    "sst": {
+      "name": "OSTIA Sea Surface Temperature L4 Reprocessed",
+      "dataset_id": "METOFFICE-GLO-SST-L4-REP-OBS-SST",
+      "enabled": true,
+      "variables": null,
+      "depth_min": null,
+      "depth_max": null,
+      "raw_dir": "data/raw/sst",
+      "filename_template": "sst_ostia_{year:04d}-{month:02d}.nc",
+      "download_frequency": "monthly"
+    },
+    "sla": {
+      "name": "DUACS Sea Level Anomaly Allsat L4",
+      "dataset_id": "cmems_obs-sl_glo_phy-ssh_my_allsat-l4-duacs-0.125deg_P1D",
+      "enabled": true,
+      "variables": null,
+      "depth_min": null,
+      "depth_max": null,
+      "raw_dir": "data/raw/sla",
+      "filename_template": "sla_duacs_{year:04d}-{month:02d}.nc",
+      "download_frequency": "monthly"
+    },
+    "sss": {
+      "name": "MULTIOBS Sea Surface Salinity Multi-Mission L4",
+      "dataset_id": "cmems_obs-mob_glo_phy-sss_my_multi_P1D",
+      "enabled": true,
+      "variables": null,
+      "depth_min": null,
+      "depth_max": null,
+      "raw_dir": "data/raw/sss",
+      "filename_template": "sss_multiobs_{year:04d}-{month:02d}.nc",
+      "download_frequency": "monthly"
+    },
+    "cur": {
+      "name": "MULTIOBS Ocean Surface Currents L4",
+      "dataset_id": "cmems_obs-mob_glo_phy-cur_my_0.25deg_P1D-m",
+      "enabled": true,
+      "variables": null,
+      "depth_min": null,
+      "depth_max": null,
+      "raw_dir": "data/raw/currents",
+      "filename_template": "currents_multiobs_{year:04d}-{month:02d}.nc",
+      "download_frequency": "monthly"
+    },
+    "wind": {
+      "name": "Hourly Surface Wind Multi-Mission L4",
+      "dataset_id": "cmems_obs-wind_glo_phy_my_l4_0.125deg_PT1H",
+      "enabled": false,
+      "variables": null,
+      "depth_min": null,
+      "depth_max": null,
+      "raw_dir": "data/raw/wind",
+      "filename_template": "wind_hourly_{year:04d}-{month:02d}.nc",
+      "download_frequency": "monthly",
+      "notice": "DISABLED: Wind dataset not yet audited."
+    }
+  }
+}
+

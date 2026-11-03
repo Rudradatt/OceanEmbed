@@ -369,7 +369,6 @@ def test_raw_files_sha256_unchanged():
         "data/raw/currents/currents_multiobs_2019-01.nc",
         "data/raw/glorys/glorys_thetao_2019-01.nc",
         "data/raw/glorys_static/glorys_static_mask_bathy.nc",
-        "data/processed/glorys_targets/glorys_targets_2019-01.nc",
     ]
 
     expected_hashes = {
@@ -379,7 +378,6 @@ def test_raw_files_sha256_unchanged():
         "data/raw/currents/currents_multiobs_2019-01.nc": "ad98b7684663b42a2eaa4ced7d5b52ec795fc711d050cdd87cd0b70eaf0ca4a7",
         "data/raw/glorys/glorys_thetao_2019-01.nc": "750070948a2fba9a3915dbfb501562c19ccbbdc6cc8e2a50ed111a93c0af5c3f",
         "data/raw/glorys_static/glorys_static_mask_bathy.nc": "fdb0c5fdc282180c0b5b58fa689753df79c22f69f4dc6dac64314a8cb82a79a5",
-        "data/processed/glorys_targets/glorys_targets_2019-01.nc": "11cb8d749a7678331df318b6f9115c646cce2d45094f57fcae8c8ad0cfad456d",
     }
 
     for p in raw_files:

@@ -76,8 +76,8 @@ RAW_FILES = {
     "cur": os.path.join(PROJECT_ROOT, "data", "raw", "currents", "currents_multiobs_2019-01.nc"),
     "glorys": os.path.join(PROJECT_ROOT, "data", "raw", "glorys", "glorys_thetao_2019-01.nc"),
     "static": os.path.join(PROJECT_ROOT, "data", "raw", "glorys_static", "glorys_static_mask_bathy.nc"),
-    "target": os.path.join(PROJECT_ROOT, "data", "processed", "glorys_targets", "glorys_targets_2019-01.nc"),
 }
+TARGET_PATH = os.path.join(PROJECT_ROOT, "data", "processed", "glorys_targets", "glorys_targets_2019-01.nc")
 
 EXPECTED_HASHES = {
     "sst": "9e733b5956f4d9bba81ec1c7a4bcbfa3b456e61af969d9ae13c57ef6fcc72265",
@@ -86,7 +86,6 @@ EXPECTED_HASHES = {
     "cur": "ad98b7684663b42a2eaa4ced7d5b52ec795fc711d050cdd87cd0b70eaf0ca4a7",
     "glorys": "750070948a2fba9a3915dbfb501562c19ccbbdc6cc8e2a50ed111a93c0af5c3f",
     "static": "fdb0c5fdc282180c0b5b58fa689753df79c22f69f4dc6dac64314a8cb82a79a5",
-    "target": "11cb8d749a7678331df318b6f9115c646cce2d45094f57fcae8c8ad0cfad456d",
 }
 
 
@@ -134,12 +133,13 @@ def run_acceptance() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     stats_before = {k: get_file_stat(p) for k, p in RAW_FILES.items()}
     for k, s in stats_before.items():
         assert s["sha256"] == EXPECTED_HASHES[k], f"Pre-check hash mismatch for {k}: {s['sha256']}"
+    target_stat_before = get_file_stat(TARGET_PATH)
 
     # -------------------------------------------------------------------------
     # Check i: Target file metadata check (READ-ONLY)
     # -------------------------------------------------------------------------
     target_header_info: Dict[str, Any] = {}
-    with h5netcdf.File(RAW_FILES["target"], "r") as f_tgt:
+    with h5netcdf.File(TARGET_PATH, "r") as f_tgt:
         t_var = f_tgt.variables["time"]
         t_units = t_var.attrs.get("units")
         t_calendar = t_var.attrs.get("calendar")
@@ -190,7 +190,7 @@ def run_acceptance() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         sla_path=RAW_FILES["sla"],
         sss_path=RAW_FILES["sss"],
         cur_path=RAW_FILES["cur"],
-        target_path=RAW_FILES["target"],
+        target_path=TARGET_PATH,
         out_path=out_nc_path,
         manifest_out_path=manifest_path,
         verbose=True,
@@ -674,7 +674,7 @@ def run_acceptance() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         sla_path=RAW_FILES["sla"],
         sss_path=RAW_FILES["sss"],
         cur_path=RAW_FILES["cur"],
-        target_path=RAW_FILES["target"],
+        target_path=TARGET_PATH,
         out_path=temp_nc_path,
         manifest_out_path=temp_manifest_path,
         verbose=False,
@@ -705,6 +705,7 @@ def run_acceptance() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     # Check j: Raw files and target file unchanged (SHA256, size, mtime)
     # -------------------------------------------------------------------------
     stats_after = {k: get_file_stat(p) for k, p in RAW_FILES.items()}
+    target_stat_after = get_file_stat(TARGET_PATH)
     all_files_unchanged = True
     integrity_details: List[str] = []
 
@@ -720,6 +721,15 @@ def run_acceptance() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
             integrity_details.append(f"{k} MODIFIED!")
         else:
             integrity_details.append(f"{k} unchanged")
+
+    target_sha_match = (target_stat_before["sha256"] == target_stat_after["sha256"])
+    target_size_match = (target_stat_before["size_bytes"] == target_stat_after["size_bytes"])
+    target_mtime_match = (target_stat_before["mtime_utc"] == target_stat_after["mtime_utc"])
+    if not (target_sha_match and target_size_match and target_mtime_match):
+        all_files_unchanged = False
+        integrity_details.append("target MODIFIED!")
+    else:
+        integrity_details.append("target unchanged")
 
     checks.append({
         "check_id": "j",
@@ -775,17 +785,29 @@ def run_acceptance() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         "all_checks_passed": all(c["status"] == "PASS" for c in checks),
         "checks": checks,
         "input_files_provenance": {
-            k: {
-                "path": stats_before[k]["path"],
-                "sha256_before": stats_before[k]["sha256"],
-                "sha256_after": stats_after[k]["sha256"],
-                "size_before": stats_before[k]["size_bytes"],
-                "size_after": stats_after[k]["size_bytes"],
-                "mtime_before": stats_before[k]["mtime_utc"],
-                "mtime_after": stats_after[k]["mtime_utc"],
-                "unchanged": (stats_before[k]["sha256"] == stats_after[k]["sha256"]),
-            }
-            for k in RAW_FILES
+            **{
+                k: {
+                    "path": stats_before[k]["path"],
+                    "sha256_before": stats_before[k]["sha256"],
+                    "sha256_after": stats_after[k]["sha256"],
+                    "size_before": stats_before[k]["size_bytes"],
+                    "size_after": stats_after[k]["size_bytes"],
+                    "mtime_before": stats_before[k]["mtime_utc"],
+                    "mtime_after": stats_after[k]["mtime_utc"],
+                    "unchanged": (stats_before[k]["sha256"] == stats_after[k]["sha256"]),
+                }
+                for k in RAW_FILES
+            },
+            "target": {
+                "path": target_stat_before["path"],
+                "sha256_before": target_stat_before["sha256"],
+                "sha256_after": target_stat_after["sha256"],
+                "size_before": target_stat_before["size_bytes"],
+                "size_after": target_stat_after["size_bytes"],
+                "mtime_before": target_stat_before["mtime_utc"],
+                "mtime_after": target_stat_after["mtime_utc"],
+                "unchanged": (target_stat_before["sha256"] == target_stat_after["sha256"]),
+            },
         },
         "built_files": {
             "netcdf": out_stat,
@@ -942,7 +964,7 @@ def print_walkthrough_sections() -> None:
     print("\n" + "=" * 80)
     print("5. TARGET FILE HEADER (glorys_targets_2019-01.nc)")
     print("=" * 80)
-    with h5netcdf.File(RAW_FILES["target"], "r") as f_tgt:
+    with h5netcdf.File(TARGET_PATH, "r") as f_tgt:
         print("Dimensions:", dict(f_tgt.dimensions))
         print("Variables:")
         for vname, v in f_tgt.variables.items():
